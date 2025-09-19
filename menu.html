@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Menu de Acesso</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #f4f6f8; 
+      margin: 0; 
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #menuBox { 
+      background: #fff; 
+      padding: 30px; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+      max-width: 500px; 
+      width: 100%;
+      text-align: center;
+    }
+    h3 { 
+      margin: 0 0 25px 0; 
+      color: #1976d2;
+      font-size: 24px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: bold;
+      text-align: left;
+    }
+    select { 
+      padding: 12px; 
+      border-radius: 6px; 
+      border: 1px solid #ccc; 
+      width: 100%; 
+      margin-bottom: 20px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    select:focus {
+      outline: none;
+      border-color: #1976d2;
+      box-shadow: 0 0 5px rgba(25, 118, 210, 0.3);
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    button { 
+      padding: 12px 20px; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    #abrir {
+      background: #1976d2; 
+      color: #fff;
+      flex: 1;
+      min-width: 150px;
+    }
+    #abrir:hover { 
+      background: #1565c0;
+    }
+    #abrir:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #sair { 
+      background: #e53935; 
+      color: #fff;
+      min-width: 100px;
+    }
+    #sair:hover {
+      background: #d32f2f;
+    }
+    .usuario-info {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) {
+      .button-group {
+        flex-direction: column;
+      }
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="menuBox">
+    <h3>Menu de Acesso</h3>
+    
+    <div class="usuario-info">
+      Bem-vindo, <strong><span id="usuarioSpan"><?= usuario ?></span></strong>
+    </div>
+
+    <label for="selectAbas">Escolha uma área:</label>
+    <select id="selectAbas">
+      <option value="">-- Selecione uma opção --</option>
+      <? for (var i = 0; i < abas.length; i++) { ?>
+        <option value="<?= abas[i] ?>"><?= abas[i] ?></option>
+      <? } ?>
+    </select>
+
+    <div class="button-group">
+      <button id="abrir">Abrir Painel</button>
+      <button id="sair">Sair</button>
+    </div>
+  </div>
+
+  <script>
+    // Função já será chamada pelo login.html quando necessário
+    // Não precisa de lógica adicional aqui, pois será manipulado pelo parent
+  </script>
+</body>
+</html>
