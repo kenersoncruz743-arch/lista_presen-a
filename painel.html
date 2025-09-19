@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f8; }
+  h2, h3 { color: #333; }
+  #menuTopo { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+  #menuTopo button { padding: 6px 12px; border:none; border-radius:5px; cursor:pointer; background:#1976d2; color:white; transition:0.2s; }
+  #menuTopo button:hover { opacity:0.9; }
+  #menuTopo button.active { background:#1565c0; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  input[type="text"] { padding: 6px 10px; width:260px; border-radius:5px; border:1px solid #ccc; }
+  button { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; transition: 0.2s; }
+  #btnBuscar { background-color: #1976d2; color: white; }
+  #btnLimpar { background-color: #f57c00; color: white; }
+  #btnSalvar { background-color: #388e3c; color: white; margin-top: 10px; }
+  #btnImprimir { background-color: #6a1b9a; color:white; margin-left:10px; }
+  #resultado { margin-top: 10px; display:grid; gap:6px; }
+  .grupo-funcao { background:#fff; border-radius:8px; box-shadow:0 0 5px rgba(0,0,0,0.08); padding:10px; }
+  .grupo-funcao h4 { margin:0 0 8px; color:#1976d2; }
+  .item-res { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border:1px solid #eee; border-radius:6px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 14px; background: white; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background-color: #1976d2; color: white; }
+  select { padding: 4px 6px; border-radius: 4px; }
+  .statusPresente { background-color: #c8e6c9; }
+  .statusAusente  { background-color: #ffcdd2; }
+  .statusFerias   { background-color: #ffe082; }
+  .statusFolga    { background-color: #b3e5fc; }
+  .statusAbandono { background-color: #e1bee7; }
+  .statusVazio    { background-color: #eeeeee; }
+  @media (max-width: 720px) {
+    input[type="text"] { width: 100%; }
+    .item-res { flex-direction: column; align-items: flex-start; gap:6px; }
+    table { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<h2>Painel de Presença</h2>
+
+<div id="menuTopo" style="display:none;"></div>
+
+<div class="toolbar">
+  <input type="text" id="filtro" placeholder="Buscar por nome ou matrícula">
+  <button id="btnBuscar" onclick="buscar()">Buscar</button>
+  <button id="btnLimpar" onclick="limparBusca()">Limpar Busca</button>
+  <button onclick="voltarMenu()">⬅️ Voltar ao Menu</button>
+</div>
+
+<div id="resultado"></div>
+
+<h3>Selecionados</h3>
+<table id="tabelaBuffer">
+  <thead>
+    <tr><th>Matrícula</th><th>Nome</th><th>Status</th><th>Ações</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div style="margin-top:10px;">
+  <button id="btnSalvar" onclick="salvarBuffer()">Salvar Buffer</button>
+  <button id="btnImprimir" onclick="window.print()">Imprimir Nomes</button>
+  <span id="statusSalvar" style="margin-left:10px;"></span>
+</div>
+
+<script>
+// Variáveis injetadas pelo servidor - MESMA ESTRUTURA DA VERSÃO FUNCIONANDO
+let supervisor = "<?= supervisor ?>";
+let abaSelecionada = "<?= aba ?>";
+
+console.log("Supervisor:", supervisor, "Aba:", abaSelecionada);
+
+// Se não vier, tenta sessionStorage
+let sup = supervisor || sessionStorage.getItem('usuario') || '';
+let aba = abaSelecionada || sessionStorage.getItem('abaSelecionada') || '';
+
+// Salva no sessionStorage
+if (sup) sessionStorage.setItem('usuario', sup);
+if (aba) sessionStorage.setItem('abaSelecionada', aba);
+
+// Cria menu local se houver aba
+if (aba) criarMenuLocal([aba]);
+
+let adicionando = {};
+let salvando = false;
+
+function criarMenuLocal(itens) {
+  const menu = document.getElementById('menuTopo');
+  if (!itens || itens.length === 0) { 
+    menu.style.display = 'none'; 
+    return; 
+  }
+  
+  menu.style.display = 'flex';
+  menu.innerHTML = "";
+  
+  itens.forEach(a => {
+    const btn = document.createElement('button');
+    btn.innerText = a;
+    btn.className = (a === aba) ? "active" : "";
+    btn.onclick = () => {
+      aba = a; 
+      atualizarTabela();
+      document.querySelectorAll('#menuTopo button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+    menu.appendChild(btn);
+  });
+}
+
+// ESTRUTURA IGUAL À VERSÃO FUNCIONANDO - SEM window.função
+function buscar() {
+  const filtro = document.getElementById("filtro").value || "";
+  google.script.run.withSuccessHandler(exibirBusca).buscarNoQuadro(filtro);
+}
+
+function limparBusca() {
+  document.getElementById("filtro").value = "";
+  document.getElementById("resultado").innerHTML = "";
+}
+
+function exibirBusca(lista) {
+  const grupos = {};
+  
+  lista.forEach(c => {
+    const f = c.funcao || "Sem Função";
+    if (!grupos[f]) grupos[f] = [];
+    grupos[f].push(c);
+  });
+
+  // Ordena colaboradores dentro de cada função
+  Object.keys(grupos).forEach(f => {
+    grupos[f].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+  });
+
+  const funcoesOrdenadas = Object.keys(grupos).sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const div = document.getElementById("resultado");
+  div.innerHTML = "";
+
+  if (funcoesOrdenadas.length === 0) {
+    div.innerHTML = "<p>Nenhum colaborador encontrado.</p>";
+    return;
+  }
+
+  funcoesOrdenadas.forEach(funcao => {
+    const box = document.createElement('div');
+    box.className = 'grupo-funcao';
+    box.innerHTML = `<h4>${funcao}</h4>`;
+
+    grupos[funcao].forEach(c => {
+      const item = document.createElement('div');
+      item.className = 'item-res';
+      item.innerHTML = `
+        <span>${c.matricula} - ${c.nome}</span>
+        <button onclick='add("${c.matricula}","${c.nome.replace(/"/g, '&quot;')}","${(c.funcao||"").replace(/"/g, '&quot;')}")'>Adicionar</button>
+      `;
+      box.appendChild(item);
+    });
+
+    div.appendChild(box);
+  });
+}
+
+function add(matricula, nome, funcao) {
+  if (adicionando[matricula]) return;
+  
+  adicionando[matricula] = true;
+
+  google.script.run.withSuccessHandler(res => {
+    if (!res.ok) {
+      alert(res.msg || "Erro ao adicionar colaborador");
+    }
+    atualizarTabela();
+    adicionando[matricula] = false;
+  }).adicionarBuffer(sup, aba, { matricula, nome, funcao });
+}
+
+function atualizarTabela() {
+  google.script.run.withSuccessHandler(renderTabela).getBuffer(sup, aba);
+}
+
+function statusToClass(status) {
+  switch (status) {
+    case "Presente": return "statusPresente";
+    case "Ausente": return "statusAusente";
+    case "Férias": return "statusFerias";
+    case "Folga": return "statusFolga";
+    case "Abandono": return "statusAbandono";
+    default: return "statusVazio";
+  }
+}
+
+function renderTabela(lista) {
+  const tbody = document.querySelector("#tabelaBuffer tbody");
+  tbody.innerHTML = "";
+
+  if (!Array.isArray(lista) || lista.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="4" style="text-align:center; color:#666;">Nenhum colaborador selecionado</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  const grupos = {};
+  lista.forEach(c => {
+    const f = c.funcao || "Sem Função";
+    if (!grupos[f]) grupos[f] = [];
+    grupos[f].push(c);
+  });
+
+  const funcoesOrdenadas = Object.keys(grupos).sort((a,b) => a.localeCompare(b,'pt-BR'));
+
+  funcoesOrdenadas.forEach(funcao => {
+    // Linha de cabeçalho da função
+    const trFuncao = document.createElement("tr");
+    trFuncao.innerHTML = `<td colspan="4" style="font-weight:bold; background:#f0f0f0; color:#1976d2;">${funcao}</td>`;
+    tbody.appendChild(trFuncao);
+
+    // Ordena colaboradores por nome
+    grupos[funcao].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+
+    grupos[funcao].forEach(c => {
+      const tr = document.createElement("tr");
+      tr.id = `linha_${c.matricula}`;
+      tr.className = statusToClass(c.status || "");
+      tr.dataset.funcao = c.funcao || "";
+
+      tr.innerHTML = `
+        <td>${c.matricula}</td>
+        <td>${c.nome}</td>
+        <td>
+          <select onchange="atualizarStatus('${c.matricula}', this.value)">
+            <option value="" ${!c.status ? "selected" : ""}></option>
+            <option value="Presente" ${c.status === "Presente" ? "selected" : ""}>Presente</option>
+            <option value="Ausente" ${c.status === "Ausente" ? "selected" : ""}>Ausente</option>
+            <option value="Férias" ${c.status === "Férias" ? "selected" : ""}>Férias</option>
+            <option value="Folga" ${c.status === "Folga" ? "selected" : ""}>Folga</option>
+            <option value="Abandono" ${c.status === "Abandono" ? "selected" : ""}>Abandono</option>
+          </select>
+        </td>
+        <td><button onclick="remover('${c.matricula}')">Remover</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+function atualizarStatus(matricula, status) {
+  const tr = document.getElementById(`linha_${matricula}`);
+  if (tr) {
+    tr.className = statusToClass(status);
+  }
+  google.script.run.atualizarStatusBuffer(sup, matricula, status);
+}
+
+function remover(matricula) {
+  google.script.run.withSuccessHandler(res => {
+    if (res.ok) {
+      const tr = document.getElementById(`linha_${matricula}`);
+      if (tr) tr.remove();
+    } else {
+      alert("Erro ao remover colaborador.");
+    }
+  }).removerBuffer(sup, matricula);
+}
+
+function salvarBuffer() {
+  if (salvando) return;
+  
+  salvando = true;
+  const statusEl = document.getElementById("statusSalvar");
+  statusEl.innerText = "Salvando...";
+  statusEl.style.color = "#1976d2";
+
+  const linhas = document.querySelectorAll("#tabelaBuffer tbody tr[id^='linha_']");
+  const dados = [];
+  
+  linhas.forEach(l => {
+    const matricula = l.children[0].innerText;
+    const nome      = l.children[1].innerText;
+    const funcao    = l.dataset.funcao || "";
+    const select    = l.querySelector("select");
+    const status    = select ? select.value : "";
+    dados.push([sup, aba, matricula, nome, funcao, status]);
+  });
+
+  google.script.run.withSuccessHandler(res => {
+    statusEl.innerText = res.msg || "Salvo com sucesso!";
+    statusEl.style.color = res.ok ? "#388e3c" : "#e53935";
+    salvando = false;
+    
+    setTimeout(() => {
+      statusEl.innerText = "";
+    }, 3000);
+  }).salvarBufferNaBase(dados);
+}
+
+function voltarMenu() {
+  sessionStorage.removeItem("abaSelecionada");
+  location.reload();
+}
+
+// Inicialização - IGUAL À VERSÃO FUNCIONANDO
+window.onload = function() {
+  console.log("Iniciando painel - Supervisor:", sup, "Aba:", aba);
+  
+  if (sup && aba) {
+    atualizarTabela();
+  } else {
+    console.warn("Dados incompletos - Supervisor:", sup, "Aba:", aba);
+    if (!sup) {
+      alert("Supervisor não identificado. Faça login novamente.");
+      location.reload();
+    }
+    if (!aba) {
+      alert("Aba não selecionada. Volte ao menu e selecione uma área.");
+      voltarMenu();
+    }
+  }
+};
+
+// Permite busca com Enter
+document.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    buscar();
+  }
+});
+</script>
+</body>
+</html>
