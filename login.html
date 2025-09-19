@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      background: #f4f6f8; 
+      margin: 0;
+    }
+    .login-box { 
+      padding: 30px; 
+      border: 1px solid #ddd; 
+      border-radius: 10px; 
+      text-align: center; 
+      background: #fff; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      max-width: 400px;
+      width: 100%;
+    }
+    h3 {
+      color: #1976d2;
+      margin-bottom: 20px;
+    }
+    input { 
+      margin: 8px 0; 
+      padding: 12px; 
+      width: 100%; 
+      border: 1px solid #ccc; 
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    button { 
+      padding: 12px 24px; 
+      margin-top: 15px; 
+      cursor: pointer; 
+      border: none; 
+      border-radius: 6px; 
+      background: #1976d2; 
+      color: #fff;
+      width: 100%;
+      font-size: 16px;
+    }
+    button:hover { 
+      opacity: 0.9; 
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #msg { 
+      color: red; 
+      margin-top: 15px;
+      font-size: 14px;
+    }
+    .loading {
+      color: #1976d2;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box" id="loginContainer">
+    <h3>Painel de Supervisor</h3>
+    <input type="text" id="usuario" placeholder="Usuário" required>
+    <input type="password" id="senha" placeholder="Senha" required>
+    <button id="btnLogin" onclick="login()">Entrar</button>
+    <p id="msg"></p>
+  </div>
+
+  <div id="appContainer" style="display:none; width: 100%; height: 100vh;"></div>
+
+  <script>
+    function login() {
+      const usuarioInput = document.getElementById("usuario").value.trim();
+      const senhaInput = document.getElementById("senha").value.trim();
+      const msgEl = document.getElementById("msg");
+      const btnLogin = document.getElementById("btnLogin");
+
+      // Limpa mensagem anterior
+      msgEl.innerText = "";
+
+      if (!usuarioInput || !senhaInput) {
+        msgEl.innerText = "Preencha usuário e senha";
+        return;
+      }
+
+      // Desabilita botão e mostra loading
+      btnLogin.disabled = true;
+      btnLogin.innerText = "Entrando...";
+      msgEl.innerText = "Validando credenciais...";
+      msgEl.className = "loading";
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btnLogin.disabled = false;
+          btnLogin.innerText = "Entrar";
+          
+          if (res.ok) {
+            sessionStorage.setItem('usuario', res.usuario);
+            showMenu(res.usuario, res.abas);
+          } else {
+            msgEl.className = "";
+            msgEl.innerText = res.msg || "Usuário ou senha inválidos";
+          }
+        })
+        .withFailureHandler(function(error) {
+          btnLogin.disabled = false;
+          btnLogin.innerText = "Entrar";
+          msgEl.className = "";
+          msgEl.innerText = "Erro de conexão. Tente novamente.";
+          console.error("Erro no login:", error);
+        })
+        .validarLogin(usuarioInput, senhaInput);
+    }
+
+    function showMenu(usuario, abas) {
+      document.getElementById('loginContainer').style.display = "none";
+      const appContainer = document.getElementById('appContainer');
+      appContainer.style.display = "block";
+
+      // Carrega o HTML base do menu
+      google.script.run
+        .withSuccessHandler(function(html) {
+          appContainer.innerHTML = html;
+          montarMenu(usuario, abas);
+        })
+        .withFailureHandler(function(error) {
+          console.error("Erro ao carregar menu:", error);
+          appContainer.innerHTML = "<p>Erro ao carregar o menu. Recarregue a página.</p>";
+        })
+        .abrirMenu(usuario);
+    }
+
+    function montarMenu(usuario, abas) {
+      const select = document.getElementById("selectAbas");
+      const sairBtn = document.getElementById("sair");
+      const usuarioSpan = document.getElementById("usuarioSpan");
+
+      if (usuarioSpan) {
+        usuarioSpan.innerText = usuario;
+      }
+
+      if (!select) {
+        console.error("Elemento selectAbas não encontrado no menu.html");
+        return;
+      }
+
+      // Limpa opções
+      select.innerHTML = "";
+
+      if (!Array.isArray(abas) || abas.length === 0) {
+        const opt = document.createElement("option");
+        opt.textContent = "Nenhuma aba disponível";
+        select.appendChild(opt);
+        return;
+      }
+
+      // Opção default
+      const optDefault = document.createElement("option");
+      optDefault.value = "";
+      optDefault.textContent = "-- Selecione uma opção --";
+      optDefault.disabled = true;
+      optDefault.selected = true;
+      select.appendChild(optDefault);
+
+      // Adiciona as abas
+      abas.forEach(aba => {
+        const opt = document.createElement("option");
+        opt.value = aba;
+        opt.textContent = aba;
+        select.appendChild(opt);
+      });
+
+      // Event listener para mudança de aba
+      const abrirBtn = document.getElementById("abrir");
+      if (abrirBtn) {
+        abrirBtn.onclick = function() {
+          const abaSelecionada = select.value;
+          if (!abaSelecionada) {
+            alert('Selecione uma aba primeiro!');
+            return;
+          }
+
+          // Mostra loading
+          abrirBtn.disabled = true;
+          abrirBtn.innerText = "Abrindo...";
+
+          google.script.run
+            .withSuccessHandler(function(html) {
+              document.getElementById("appContainer").innerHTML = html;
+            })
+            .withFailureHandler(function(error) {
+              console.error("Erro ao abrir painel:", error);
+              alert("Erro ao abrir o painel. Tente novamente.");
+              abrirBtn.disabled = false;
+              abrirBtn.innerText = "Abrir Painel";
+            })
+            .abrirItemMenu(abaSelecionada, usuario);
+        };
+      }
+
+      // Botão sair
+      if (sairBtn) {
+        sairBtn.onclick = function() {
+          sessionStorage.clear();
+          location.reload();
+        };
+      }
+    }
+
+    // Permite login com Enter
+    document.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        login();
+      }
+    });
+  </script>
+</body>
+</html>
